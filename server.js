@@ -9,6 +9,18 @@ const serverOptions = {
   passphrase: "mihailo",
 };
 
+const users = [
+  { id: 12345, name: "Admin", age: 30, role: "admin", password: "admin" },
+  { id: 67890, name: "Worker", age: 25, role: "worker", password: "worker" },
+];
+
+const authenticatedUsers = new Map();
+
+const roles = {
+  admin: { ping: true },
+  worker: { ping: false }
+};
+
 const fetchFile = (req, res, file, contentType) => {
   fs.readFile(path.join(__dirname, file), "utf8", (err, data) => {
     if (err) {
@@ -21,21 +33,80 @@ const fetchFile = (req, res, file, contentType) => {
   });
 };
 
+const login = (req, res, parsedBody) => {
+  console.log("Login in process");
+  const { Username, Password } = parsedBody;
+
+  const user = users.find(
+    u => u.name === Username && u.password === Password
+  );
+  console.log(user);
+
+  if (user) {
+    authenticatedUsers.set(user, user.role);
+    console.log(authenticatedUsers);
+
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ message: "Korisnik ulogovan!", user: user }));
+    console.log(`User ${user.name} logged in.`);
+  } else {
+    res.writeHead(401, { "Content-Type": "text/plain" });
+    res.end("Korisnik nije pronadjen");
+  }
+};
+
 const server = https.createServer(serverOptions, (req, res) => {
   if (req.url === "/") {
     fetchFile(req, res, "index.html", "text/html");
-  } 
-  else if (req.url === "/script.js") {
+  } else if (req.url === "/script.js") {
     fetchFile(req, res, "script.js", "application/javascript");
-  } 
-  
-  else if (req.url === "/login") {
+  } else if (req.method === "POST") {
+    let body = "";
 
-  } 
-  else {
+    req.on("data", (chunk) => {
+      body += chunk.toString();
+    });
+
+    req.on("end", async () => {
+      try {
+        if (!body) {
+          throw new Error("empty req body");
+        }
+
+        const parsedBody = JSON.parse(body);
+
+        if (req.url === "/login") {
+          login(req, res, parsedBody);
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    });
+  } else if(req.method === "GET") {
+    if(req.url.startsWith("/access")) {
+      const url = req.url.split('/');
+
+      const role = url[2];
+      const action = url[3];
+      console.log(role, action);
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ allowed: roles[role][action] }));
+
+    } else {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: "Invalid role or action" }));
+
+    }
+
+  } else {
     res.writeHead(404, { "Content-Type": "text/plain" });
     res.end("Not Found");
   }
+});
+
+server.listen(8080, () => {
+  console.log("WebSocket server running on wss://localhost:8080");
 });
 
 const wss = new WebSocket.Server({ server });
@@ -43,44 +114,25 @@ const wss = new WebSocket.Server({ server });
 wss.on("connection", (ws) => {
   console.log("Client connected");
 
+  ws.send(JSON.stringify({ message: "You are connected." }));
+
   ws.on("message", (message) => {
     const request = JSON.parse(message);
 
-    if (request.type === "ping" && ws.isAuthenticated) {
+    if (request.type === "ping" && request.role === "admin") {
       const response = { type: "pong", timestamp: new Date().toISOString() };
       ws.send(JSON.stringify(response));
+    } else if(request.type === "ping" && !request.role === "admin"){
+      const response = {type: "pong", message: "access denied"};
+      ws.send(JSON.stringify(response));
     }
+  });
 
-    if(request.type === "/login") {
-        const {username, password} = request;
+  ws.on("close", () => {
+    console.log("klijent diskonektovan");
+  });
 
-        const user = users.find((u) => u.username === username && u.password === password);
-
-        if(user) {
-            const response = {
-                type: "loginResponse",
-                success: true
-            }
-            ws.send(JSON.stringify(response));
-            ws.isAuthenticated = true;  // Mark this WebSocket connection as authenticated
-        console.log(`User ${username} logged in`);
-        } else {
-            ws.send(JSON.stringify({ error: "Invalid credentials" }));
-        }
-    }
-
-    if (request.type === "getUserData" && !ws.isAuthenticated) {
-        // If not authenticated, reject the request
-        ws.send(JSON.stringify({ error: "User is not authenticated" }));
-      }
+  ws.on("error", (error) => {
+    console.error("Greska:", error);
   });
 });
-
-server.listen(8080, () => {
-  console.log("WebSocket server running on wss://localhost:8080");
-});
-
-const users = [
-  { id: 12345, name: "John Doe", age: 30, role: "admin", password: "admin" },
-  { id: 67890, name: "Jane Smith", age: 25, role: "worker", password: "worker" },
-];

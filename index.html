@@ -8,7 +8,7 @@
 </head>
 <body>
 
-    <div id="loginpage">
+    <div id="loginPanel">
         <h1>Login</h1>
   
         <label for="username">Username:</label>
@@ -22,9 +22,22 @@
         <p id="loginMessage"></p>
     </div>
     
-    <div id="homepage">
+    <div id="adminPanel" style="display: none;">
+        <h3>Admin Dashboard</h3>
+        <p>Welcome, Admin! You have full access.</p>
+        
         <h1>WebSocket API Call Example</h1>
         <div id="response"></div>
+
+        <button class="logoutBtn">Logout</button>
+    </div>
+
+    <div id="workerPanel" style="display: none;">
+        <h3>Worker Dashboard</h3>
+        <p>Welcome, Worker! You have limited access.</p>
+        <h1>WebSocket API Call Example</h1>
+
+        <button class="logoutBtn">Logout</button>
     </div>
   
     <script src="script.js"></script>
